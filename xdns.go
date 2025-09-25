@@ -34,11 +34,11 @@ import (
 
 var (
 	iface, srcIP, srcMAC, gtwMAC, domainListFile, dnsFile, dnsList, outputFile string
-	rate, waitingTime                                                           uint
-	totalCount, sentCount, foundCount                                           uint64
-	dnsServers                                                                  []string
-	showVersion, dryRun                                                         bool
-	packetChan                                                                  = make(
+	rate, waitingTime                                                          uint
+	totalCount, sentCount, foundCount                                          uint64
+	dnsServers                                                                 []string
+	showVersion, dryRun                                                        bool
+	packetChan                                                                 = make(
 		chan []byte, 10000,
 	)
 	storeChan = make(
@@ -85,7 +85,7 @@ func initParams() {
 	flag.StringVar(&dnsList, "dnsList", "", "DNS server IP list with comma separated (default 8.8.8.8)")
 	flag.StringVar(&outputFile, "out", "result-<date>.txt", "Output file")
 	flag.BoolVar(&dryRun, "dry", false, "Dry run mode (only print domain, dns ip)")
-	flag.UintVar(&waitingTime, "wtgtime", 5, "Waiting time (s) until exit")
+	flag.UintVar(&waitingTime, "wtgtime", 10, "Waiting time (s) until exit")
 
 	flag.Parse()
 
@@ -298,7 +298,7 @@ func generatePackets() {
 
 		// Convert domain to lowercase and ensure it doesn't end with a dot
 		domain = strings.TrimRight(strings.ToLower(domain), ".")
-		
+
 		// Select DNS server using round-robin
 		dnsServer := dnsServers[idx%len(dnsServers)]
 
@@ -483,8 +483,16 @@ func recvPackets(ctx context.Context) {
 				continue
 			}
 
-			// Only filter out NXDOMAIN responses, no need to check domain suffix
-			if !dns_.QR || dns_.ResponseCode == layers.DNSResponseCodeNXDomain {
+			// 确保这是一个 DNS 响应包
+			if !dns_.QR {
+				continue
+			}
+
+			// 排除特定的DNS错误响应，
+			// 排除：NXDOMAIN、SERVFAIL、REFUSED等明确的错误状态
+			if dns_.ResponseCode == layers.DNSResponseCodeNXDomain ||
+				dns_.ResponseCode == layers.DNSResponseCodeServFail ||
+				dns_.ResponseCode == layers.DNSResponseCodeRefused {
 				continue
 			}
 
